@@ -1,0 +1,15 @@
+/**/*.jou
+/**/*.log
+/**/*.str
+/**/*.bit
+/**/*.json
+
+/.Xil
+/**/master
+/**/.vscode
+
+*.jou
+*.log
+*.str
+*.bit
+*.json
