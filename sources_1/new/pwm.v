@@ -159,7 +159,7 @@ module tb_pwm_test_1();
     wire pwm;
 
     // 50% duty  10000Hz
-    pwm_controller #(125) pwm0(clk, reset_p, 10, 10000, pwm);
+    pwm_controller #(125) pwm0(clk, reset_p, 50, 10000, pwm);
 
     initial begin
         clk = 0;
