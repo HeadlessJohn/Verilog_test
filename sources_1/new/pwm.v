@@ -110,20 +110,26 @@ module pwm_controller #(
     //2000Hz를 만드려면 한번에 sys_clk/2000 을 cnt에 더한다
     // nHz를 만드려면 한번에 sys_clk/n 을 cnt에 더한다
     reg [26:0] cnt;
-    reg pwm_clk_x100; // 
+    reg pwm_clk_nbit; // 
+
+    wire [26:0] temp;
+    assign temp = (REAL_SYS_FREQ /pwm_freq);
 
     always @(posedge reset_p, posedge clk) begin
         if (reset_p) begin
-            pwm_clk_x100 <= 0;
+            pwm_clk_nbit <= 0;
             cnt <= 0;
         end
         else begin
-            if (cnt >= REAL_SYS_FREQ /pwm_freq /100 - 1) begin
+            // 128단계 제어 -> 128로 나누므로 우쉬프트 연산으로 대체 가능
+            if (cnt >= temp[26:7] - 1) begin
+            // 100단계 제어
+            // if (cnt >= REAL_SYS_FREQ /pwm_freq /100 - 1) begin
                 cnt <= 0;
-                pwm_clk_x100 <= 1'b1;
+                pwm_clk_nbit <= 1'b1;
             end
             else begin
-                pwm_clk_x100 <= 1'b0;
+                pwm_clk_nbit <= 1'b0;
             end
             cnt = cnt + 1;
 
@@ -137,9 +143,13 @@ module pwm_controller #(
             cnt_duty <= 0;
         end
         else begin
-            if (pwm_clk_x100) begin
-                if(cnt_duty >= 99) cnt_duty <= 0;
-                else cnt_duty <= cnt_duty + 1;
+            if (pwm_clk_nbit) begin
+                // 100단계로 제어
+                // if(cnt_duty >= 99) cnt_duty <= 0;
+                // else cnt_duty <= cnt_duty + 1;
+                
+                //128단계로 제어
+                cnt_duty <= cnt_duty + 1;
 
                 if(cnt_duty < duty) pwm <= 1'b1;
                 else pwm <= 1'b0;

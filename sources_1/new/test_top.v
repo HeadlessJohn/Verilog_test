@@ -1291,19 +1291,19 @@ module led_pwm_top #(
 
     pwm_controller #(SYS_FREQ) pwmr(.clk      (clk), 
                                     .reset_p  (reset_p), 
-                                    .duty     (clk_div[27:22]),
+                                    .duty     (clk_div[27:21]),
                                     .pwm_freq (10000), 
                                     .pwm      (pwm_r)          );
 
     pwm_controller #(SYS_FREQ) pwmg(.clk      (clk), 
                                     .reset_p  (reset_p), 
-                                    .duty     (clk_div[26:21]),
+                                    .duty     (clk_div[26:20]),
                                     .pwm_freq (10000), 
                                     .pwm      (pwm_g)          );
 
     pwm_controller #(SYS_FREQ) pwmb(.clk      (clk), 
                                     .reset_p  (reset_p), 
-                                    .duty     (clk_div[25:20]),
+                                    .duty     (clk_div[25:19]),
                                     .pwm_freq (10000), 
                                     .pwm      (pwm_b)          );
 
