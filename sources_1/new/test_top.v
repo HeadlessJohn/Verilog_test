@@ -1319,7 +1319,8 @@ endmodule
 
 
 module dc_motor_pwm_top #(
-    parameter SYS_FREQ = 125
+    parameter SYS_FREQ = 125,
+    parameter N = 10
 ) (
     input clk, reset_p,
     output motor_pwm );
@@ -1330,9 +1331,9 @@ module dc_motor_pwm_top #(
         else clk_div <= clk_div + 1;
     end
 
-    pwm_controller #(SYS_FREQ) pwm_motor(.clk      (clk), 
+    pwm_controller #(SYS_FREQ, N) pwm_motor(.clk      (clk), 
                                          .reset_p  (reset_p), 
-                                         .duty     (clk_div[29:23]),
+                                         .duty     (1023),
                                          .pwm_freq (60), 
                                          .pwm      (motor_pwm)          );
 
@@ -1375,3 +1376,47 @@ module fan_test #(
 
 endmodule
 
+module sg90_test_top #(
+    parameter SYS_FREQ = 125,
+    parameter N = 10
+) (
+    input clk, reset_p,
+    input [3:0] btn,
+    output motor_pwm );
+
+    //1ms = 5% duty
+    //1.5ms = 7.5% duty
+    //2ms = 10% duty
+    //1024*0.05 = 51
+    //1024*0.075 = 77
+    //1024*0.1 = 102
+
+    button_cntr btn_cntr_0 (clk, reset_p, btn[0], btn_0_p);
+    button_cntr btn_cntr_1 (clk, reset_p, btn[1], btn_1_p);
+    button_cntr btn_cntr_2 (clk, reset_p, btn[2], btn_2_p);
+
+    reg [9:0] pwm_duty;
+    always @(posedge clk, posedge reset_p) begin
+        if(reset_p) begin 
+            pwm_duty <= 0;
+        end
+        else begin
+            if (btn_0_p) begin 
+                pwm_duty <= pwm_duty - 5;
+                if (pwm_duty < 25) pwm_duty <= 25;//L
+            end
+            else if (btn_1_p) pwm_duty <= 80;
+            else if (btn_2_p) begin
+                pwm_duty <= pwm_duty + 5;
+                if (pwm_duty > 180) pwm_duty <= 180;//R
+            end            
+        end
+    end
+
+    pwm_controller #(SYS_FREQ, N) pwm_motor(.clk      (clk), 
+                                         .reset_p  (reset_p), 
+                                         .duty     (pwm_duty),
+                                         .pwm_freq (50), 
+                                         .pwm      (motor_pwm)          );
+
+endmodule

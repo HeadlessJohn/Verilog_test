@@ -97,10 +97,11 @@ endmodule
 
 
 module pwm_controller #(
-    parameter SYS_FREQ = 125 //125MHz
+    parameter SYS_FREQ = 125, //125MHz
+    parameter N = 7 // 2^7 = 128단계
     )(
     input clk, reset_p,
-    input [6:0] duty,
+    input [N-1:0] duty, //N비트의 duty비트
     input [13:0] pwm_freq,
     output reg pwm    );
 
@@ -123,8 +124,8 @@ module pwm_controller #(
             cnt <= 0;
         end
         else begin
-            // 128단계 제어 -> 128로 나누므로 우쉬프트 연산으로 대체 가능
-            if (cnt >= temp[26:7] - 1) begin
+            // 128단계 제어 -> 2^7로 나누므로 우쉬프트 연산으로 대체 가능
+            if (cnt >= temp[26:N] - 1) begin
             // 100단계 제어
             // if (cnt >= REAL_SYS_FREQ /pwm_freq /100 - 1) begin
                 cnt <= 0;
@@ -138,7 +139,7 @@ module pwm_controller #(
         end
     end
 
-    reg [6:0] cnt_duty;
+    reg [N-1:0] cnt_duty;
     always @(posedge reset_p, posedge clk) begin
         if (reset_p) begin
             pwm <= 1'b0;
@@ -150,7 +151,7 @@ module pwm_controller #(
                 // if(cnt_duty >= 99) cnt_duty <= 0;
                 // else cnt_duty <= cnt_duty + 1;
                 
-                //128단계로 제어
+                //2^N단계로 제어
                 cnt_duty <= cnt_duty + 1;
 
                 if(cnt_duty < duty) pwm <= 1'b1;
