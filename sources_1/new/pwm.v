@@ -111,7 +111,9 @@ module pwm_controller #(
     // nHz를 만드려면 한번에 sys_clk/n 을 cnt에 더한다
     reg [26:0] cnt;
     reg pwm_clk_nbit; // 
-
+    
+    //clock에 관계 없는 부분이므로 나눗셈을 사용해도 negative slack이 발생하지 않음
+    //처음에 나눗셈을 계산하는동안 긴 pdt 시간 동안 오동작 발생 가능성 있음
     wire [26:0] temp;
     assign temp = (REAL_SYS_FREQ /pwm_freq);
 
