@@ -1331,9 +1331,47 @@ module dc_motor_pwm_top #(
     end
 
     pwm_controller #(SYS_FREQ) pwm_motor(.clk      (clk), 
-                                    .reset_p  (reset_p), 
-                                    .duty     (clk_div[29:23]),
-                                    .pwm_freq (60), 
-                                    .pwm      (motor_pwm)          );
+                                         .reset_p  (reset_p), 
+                                         .duty     (clk_div[29:23]),
+                                         .pwm_freq (60), 
+                                         .pwm      (motor_pwm)          );
 
 endmodule
+
+module fan_test #(
+    parameter SYS_FREQ = 125
+) (
+    input clk, reset_p,
+    input [3:0] btn,
+    output reg [1:0] dir,
+    output motor_pwm );
+    
+    btn_cntr btn_cntr_0 (clk, reset_p, btn[0], btn_0_p);
+    btn_cntr btn_cntr_1 (clk, reset_p, btn[1], btn_1_p);
+    btn_cntr btn_cntr_2 (clk, reset_p, btn[2], btn_2_p);
+    btn_cntr btn_cntr_3 (clk, reset_p, btn[3], btn_3_p);
+
+    reg [6:0] pwm_duty;
+    always @(posedge clk, posedge reset_p) begin
+        if(reset_p) begin 
+            pwm_duty <= 0;
+            dir <= 2'b01;
+        end
+        else begin
+            if (btn_0_p) pwm_duty <= pwm_duty + 1;
+            else if (btn_1_p) pwm_duty <= pwm_duty - 1;
+            else if (btn_2_p) pwm_duty <= 0;
+            else if (btn_3_p) begin
+                dir <= 2'b10;
+            end
+        end
+    end 
+
+    pwm_controller #(SYS_FREQ) pwm_motor(.clk      (clk), 
+                                         .reset_p  (reset_p), 
+                                         .duty     (pwm_duty),
+                                         .pwm_freq (60), 
+                                         .pwm      (motor_pwm)          );
+
+endmodule
+
