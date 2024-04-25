@@ -1333,7 +1333,7 @@ module dc_motor_pwm_top #(
     pwm_controller #(SYS_FREQ) pwm_motor(.clk      (clk), 
                                     .reset_p  (reset_p), 
                                     .duty     (clk_div[29:23]),
-                                    .pwm_freq (1000), 
+                                    .pwm_freq (60), 
                                     .pwm      (motor_pwm)          );
 
 endmodule

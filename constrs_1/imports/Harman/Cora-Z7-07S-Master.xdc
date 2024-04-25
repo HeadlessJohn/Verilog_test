@@ -30,7 +30,7 @@ set_property -dict { PACKAGE_PIN D20   IOSTANDARD LVCMOS33 } [get_ports { reset_
 # set_property -dict { PACKAGE_PIN W19   IOSTANDARD LVCMOS33 PULLDOWN TRUE} [get_ports { row[3] }]; #IO_L22N_T3_34 Sch=ja_n[4]
 
 ## Pmod Header JB
-# set_property -dict { PACKAGE_PIN W14   IOSTANDARD LVCMOS33 } [get_ports { btn[0] }]; #IO_L8P_T1_34 Sch=jb_p[1]
+set_property -dict { PACKAGE_PIN W14   IOSTANDARD LVCMOS33 } [get_ports { motor_pwm }]; #IO_L8P_T1_34 Sch=jb_p[1]
 # set_property -dict { PACKAGE_PIN Y14   IOSTANDARD LVCMOS33 } [get_ports { btn[1] }]; #IO_L8N_T1_34 Sch=jb_n[1]
 # set_property -dict { PACKAGE_PIN T11   IOSTANDARD LVCMOS33 } [get_ports { btn[2] }]; #IO_L1P_T0_34 Sch=jb_p[2]
 # set_property -dict { PACKAGE_PIN T10   IOSTANDARD LVCMOS33 } [get_ports { btn[3] }]; #IO_L1N_T0_34 Sch=jb_n[2]
@@ -102,7 +102,7 @@ set_property -dict { PACKAGE_PIN M18   IOSTANDARD LVCMOS33 } [get_ports { led_ba
 set_property -dict { PACKAGE_PIN U15   IOSTANDARD LVCMOS33 } [get_ports { led_bar[6] }]; #IO_L11N_T1_SRCC_34 Sch=ck_io[10]
 set_property -dict { PACKAGE_PIN K18   IOSTANDARD LVCMOS33 } [get_ports { led_bar[7] }]; #IO_L12N_T1_MRCC_35 Sch=ck_io[11]
 # set_property -dict { PACKAGE_PIN J18   IOSTANDARD LVCMOS33 } [get_ports { led_bar[4] }]; #IO_L14P_T2_AD4P_SRCC_35 Sch=ck_io[12]
-set_property -dict { PACKAGE_PIN G15   IOSTANDARD LVCMOS33 } [get_ports { motor_pwm }]; #IO_L19N_T3_VREF_35 Sch=ck_io[13]
+# set_property -dict { PACKAGE_PIN G15   IOSTANDARD LVCMOS33 } [get_ports { motor_pwm }]; #IO_L19N_T3_VREF_35 Sch=ck_io[13]
 
 ## ChipKit Inner Digital Header
 set_property -dict { PACKAGE_PIN R16   IOSTANDARD LVCMOS33 } [get_ports { echo }]; #IO_L19P_T3_34 Sch=ck_io[26]
