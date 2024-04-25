@@ -1315,3 +1315,25 @@ module led_pwm_top #(
 
  
 endmodule
+
+
+
+module dc_motor_pwm_top #(
+    parameter SYS_FREQ = 125
+) (
+    input clk, reset_p,
+    output motor_pwm );
+    
+    reg[29:0] clk_div;
+    always @(posedge clk, posedge reset_p) begin
+        if(reset_p) clk_div <= 0; 
+        else clk_div <= clk_div + 1;
+    end
+
+    pwm_controller #(SYS_FREQ) pwm_motor(.clk      (clk), 
+                                    .reset_p  (reset_p), 
+                                    .duty     (clk_div[29:23]),
+                                    .pwm_freq (1000), 
+                                    .pwm      (motor_pwm)          );
+
+endmodule
