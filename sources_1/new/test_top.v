@@ -1378,45 +1378,78 @@ endmodule
 
 module sg90_test_top #(
     parameter SYS_FREQ = 125,
-    parameter N = 10
+    parameter N = 12
 ) (
     input clk, reset_p,
     input [3:0] btn,
+    output [3:0] com,
+    output [7:0] seg_7,
     output motor_pwm );
 
-    //1ms = 5% duty
-    //1.5ms = 7.5% duty
-    //2ms = 10% duty
-    //1024*0.05 = 51
-    //1024*0.075 = 77
-    //1024*0.1 = 102
+    // 0.5ms =  2.5% duty  -> right
+    //   1ms =    5% duty  
+    // 1.5ms =  7.5% duty  -> center
+    //   2ms =   10% duty
+    // 2.5ms = 12.5% duty  -> left
 
+    // N=10 기준
+    // 1024 * 0.025 =  26    (25.6)
+    // 1024 * 0.05  =  51    (51.2)
+    // 1024 * 0.075 =  77    (76.8)
+    // 1024 * 0.1   = 102   (102.4)
+    // 1024 * 0.125 = 128
+
+    // N=12 기준
+    localparam offset = 9;  // 높아질수록 왼쪽으로 이동
+    // 이론적인 값
+    localparam deg_0_t   =  512; //left
+    localparam deg_90_t  =  308; //center
+    localparam deg_180_t =  104; //right
+    // offset 적용한 값
+    localparam deg_0_a   = deg_0_t   + offset; //left
+    localparam deg_90_a  = deg_90_t  + offset; //center
+    localparam deg_180_a = deg_180_t + offset; //right
+    // 1도당 필요 값
+    // deg_0_t - deg_180_t = 408
+    // 408/180 = 2.2666
+    // localparam deg_1 = (deg_0_t - deg_180_t) / 180;  // 408/180 = 2.2666
+
+
+    wire btn_0_p, btn_1_p, btn_2_p;
     button_cntr btn_cntr_0 (clk, reset_p, btn[0], btn_0_p);
     button_cntr btn_cntr_1 (clk, reset_p, btn[1], btn_1_p);
     button_cntr btn_cntr_2 (clk, reset_p, btn[2], btn_2_p);
 
-    reg [9:0] pwm_duty;
+    reg [N-1:0] pwm_duty;
     always @(posedge clk, posedge reset_p) begin
         if(reset_p) begin 
             pwm_duty <= 0;
         end
         else begin
             if (btn_0_p) begin 
-                pwm_duty <= pwm_duty - 5;
-                if (pwm_duty < 25) pwm_duty <= 25;//L
+                pwm_duty = pwm_duty - 23; // 대충 10도씩 움직임
+                if (pwm_duty < deg_180_a) pwm_duty = deg_180_a;//L
             end
-            else if (btn_1_p) pwm_duty <= 81;
+            else if (btn_1_p) pwm_duty = deg_90_a;
             else if (btn_2_p) begin
-                pwm_duty <= pwm_duty + 5;
-                if (pwm_duty > 180) pwm_duty <= 180;//R
+                pwm_duty = pwm_duty + 23;
+                if (pwm_duty > deg_0_a) pwm_duty = deg_0_a;//R
             end            
         end
     end
 
     pwm_controller #(SYS_FREQ, N) pwm_motor(.clk      (clk), 
-                                         .reset_p  (reset_p), 
-                                         .duty     (pwm_duty),
-                                         .pwm_freq (50), 
-                                         .pwm      (motor_pwm)          );
+                                            .reset_p  (reset_p), 
+                                            .duty     (pwm_duty),
+                                            .pwm_freq (50), 
+                                            .pwm      (motor_pwm)          );
 
+    wire [15:0] pwm_data;
+    bin_to_dec btd(.bin({pwm_duty}), .bcd(pwm_data));
+
+    fnd_4_digit_cntr      fnd (.clk             (clk), 
+                               .reset_p         (reset_p), 
+                               .value           (pwm_data),
+                               .segment_data_ca (seg_7), 
+                               .com_sel         (com) );
 endmodule
