@@ -1424,7 +1424,7 @@ module sg90_test_top #(
     reg [N-1:0] pwm_duty;
     always @(posedge clk, posedge reset_p) begin
         if(reset_p) begin 
-            pwm_duty <= 0;
+            pwm_duty <= deg_90_a;
         end
         else begin
             // case ( {btn_3_p, btn_2_p, btn_1_p, btn_0_p} )
@@ -1444,14 +1444,14 @@ module sg90_test_top #(
             // endcase
             if (btn_0_p) begin 
                 pwm_duty = pwm_duty - 23; // 대충 10도씩 움직임
-                if (pwm_duty < deg_180_a) pwm_duty = deg_180_a;//L
+                if (pwm_duty < deg_180_a) pwm_duty = deg_180_a; // Right
             end
             else if (btn_1_p) begin
                 pwm_duty = pwm_duty + 23;
-                if (pwm_duty > deg_0_a) pwm_duty = deg_0_a;//R
+                if (pwm_duty > deg_0_a) pwm_duty = deg_0_a;     //Left
             end            
-            else if (btn_2_p) pwm_duty = deg_180_a;
-            else if (btn_3_p) pwm_duty = deg_0_a;
+            else if (btn_2_p) pwm_duty = deg_180_a;             // Right max 
+            else if (btn_3_p) pwm_duty = deg_0_a;               // Left max
         end
     end
 
