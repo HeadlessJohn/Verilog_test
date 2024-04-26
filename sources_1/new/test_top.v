@@ -1405,7 +1405,7 @@ module sg90_test_top #(
                 pwm_duty <= pwm_duty - 5;
                 if (pwm_duty < 25) pwm_duty <= 25;//L
             end
-            else if (btn_1_p) pwm_duty <= 80;
+            else if (btn_1_p) pwm_duty <= 81;
             else if (btn_2_p) begin
                 pwm_duty <= pwm_duty + 5;
                 if (pwm_duty > 180) pwm_duty <= 180;//R
