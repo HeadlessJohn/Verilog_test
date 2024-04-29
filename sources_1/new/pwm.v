@@ -107,9 +107,6 @@ module pwm_controller #(
 
     localparam REAL_SYS_FREQ = SYS_FREQ * 1000 * 1000;
 
-    //1000Hz를 만드려면 한번에 sys_clk/1000 을 cnt에 더한다
-    //2000Hz를 만드려면 한번에 sys_clk/2000 을 cnt에 더한다
-    // nHz를 만드려면 한번에 sys_clk/n 을 cnt에 더한다
     reg [26:0] cnt;
     reg pwm_clk_nbit; // 
     
@@ -147,22 +144,11 @@ module pwm_controller #(
         end
         else begin
             if (pwm_clk_nbit) begin
-                // 100단계로 제어
-                // if(cnt_duty >= 99) cnt_duty <= 0;
-                // else cnt_duty <= cnt_duty + 1;
-                
                 //2^N단계로 제어
                 cnt_duty <= cnt_duty + 1;
-
                 if(cnt_duty < duty) pwm <= 1'b1;
                 else pwm <= 1'b0;
-            end
-            else begin
-                
-            end
-            
+            end           
         end
     end
 endmodule
-//test
-

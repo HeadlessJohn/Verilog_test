@@ -1415,11 +1415,11 @@ module sg90_test_top #(
     // localparam deg_1 = (deg_0_t - deg_180_t) / 180;  // 408/180 = 2.2666
 
 
-    wire btn_0_p, btn_1_p, btn_2_p, btn_3_p;
-    button_cntr btn_cntr_0 (clk, reset_p, btn[0], btn_0_p);
-    button_cntr btn_cntr_1 (clk, reset_p, btn[1], btn_1_p);
-    button_cntr btn_cntr_2 (clk, reset_p, btn[2], btn_2_p);
-    button_cntr btn_cntr_3 (clk, reset_p, btn[3], btn_3_p);
+    wire [3:0]btn_p;
+    button_cntr btn_cntr_0 (clk, reset_p, btn[0], btn_p[0]);
+    button_cntr btn_cntr_1 (clk, reset_p, btn[1], btn_p[1]);
+    button_cntr btn_cntr_2 (clk, reset_p, btn[2], btn_p[2]);
+    button_cntr btn_cntr_3 (clk, reset_p, btn[3], btn_p[3]);
 
     reg [N-1:0] pwm_duty;
     always @(posedge clk, posedge reset_p) begin
@@ -1427,31 +1427,31 @@ module sg90_test_top #(
             pwm_duty <= deg_90_a;
         end
         else begin
-            // case ( {btn_3_p, btn_2_p, btn_1_p, btn_0_p} )
-            //     4'b0001 : begin
-            //         pwm_duty = pwm_duty - 23; // 대충 10도씩 움직임
-            //         if (pwm_duty < deg_180_a) pwm_duty = deg_180_a;//L
-            //     end
-
-            //     4'b0010 : begin
-            //         pwm_duty = pwm_duty + 23;
-            //         if (pwm_duty > deg_0_a) pwm_duty = deg_0_a;//R
-            //     end
-
-            //     4'b0100 : pwm_duty = deg_180_a;
-            //     4'b1000 : pwm_duty = deg_0_a;
-            //     default : pwm_duty = deg_90_a;
-            // endcase
-            if (btn_0_p) begin 
+            case (btn_p)
+                4'b0001 : begin 
+                    pwm_duty = pwm_duty - 23; // 대충 10도씩 움직임
+                    if (pwm_duty < deg_180_a) pwm_duty = deg_180_a; // Right
+                end
+                4'b0010 : begin
+                    pwm_duty = pwm_duty + 23;
+                    if (pwm_duty > deg_0_a) pwm_duty = deg_0_a;     //Left
+                end
+                4'b0100 : pwm_duty = deg_180_a;             // Right max
+                4'b1000 : pwm_duty = deg_0_a;               // Left max
+                default : pwm_duty = pwm_duty;               // 전 상태 유지
+            endcase
+            /*
+            if (btn_p[0]) begin 
                 pwm_duty = pwm_duty - 23; // 대충 10도씩 움직임
                 if (pwm_duty < deg_180_a) pwm_duty = deg_180_a; // Right
             end
-            else if (btn_1_p) begin
+            else if (btn_p[1]) begin
                 pwm_duty = pwm_duty + 23;
                 if (pwm_duty > deg_0_a) pwm_duty = deg_0_a;     //Left
             end            
-            else if (btn_2_p) pwm_duty = deg_180_a;             // Right max 
-            else if (btn_3_p) pwm_duty = deg_0_a;               // Left max
+            else if (btn_p[2]) pwm_duty = deg_180_a;             // Right max 
+            else if (btn_p[3]) pwm_duty = deg_0_a;               // Left max
+            */
         end
     end
 
