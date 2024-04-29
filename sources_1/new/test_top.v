@@ -1421,37 +1421,43 @@ module sg90_test_top #(
     button_cntr btn_cntr_2 (clk, reset_p, btn[2], btn_p[2]);
     button_cntr btn_cntr_3 (clk, reset_p, btn[3], btn_p[3]);
 
+    wire clk_usec, clk_msec, clk_Nmsec;
+    clock_usec #(SYS_FREQ) usec(clk, reset_p, clk_usec);
+    clock_div_1000 msec(clk, reset_p, clk_usec, clk_msec);
+    clock_div_N #(4) Nmsec(clk, reset_p, clk_msec, clk_Nmsec);
+
     reg [N-1:0] pwm_duty;
+    reg dir_toggle;
     always @(posedge clk, posedge reset_p) begin
         if(reset_p) begin 
             pwm_duty <= deg_90_a;
+            dir_toggle <= 1'b1; // 왼쪽 먼저
         end
         else begin
-            case (btn_p)
-                4'b0001 : begin 
-                    pwm_duty = pwm_duty - 23; // 대충 10도씩 움직임
-                    if (pwm_duty < deg_180_a) pwm_duty = deg_180_a; // Right
-                end
-                4'b0010 : begin
-                    pwm_duty = pwm_duty + 23;
-                    if (pwm_duty > deg_0_a) pwm_duty = deg_0_a;     //Left
-                end
-                4'b0100 : pwm_duty = deg_180_a;             // Right max
-                4'b1000 : pwm_duty = deg_0_a;               // Left max
-                default : pwm_duty = pwm_duty;               // 전 상태 유지
-            endcase
-            /*
-            if (btn_p[0]) begin 
-                pwm_duty = pwm_duty - 23; // 대충 10도씩 움직임
-                if (pwm_duty < deg_180_a) pwm_duty = deg_180_a; // Right
+            if (btn_p[0]) begin
+                dir_toggle <= ~dir_toggle;
             end
-            else if (btn_p[1]) begin
-                pwm_duty = pwm_duty + 23;
-                if (pwm_duty > deg_0_a) pwm_duty = deg_0_a;     //Left
-            end            
-            else if (btn_p[2]) pwm_duty = deg_180_a;             // Right max 
-            else if (btn_p[3]) pwm_duty = deg_0_a;               // Left max
-            */
+            else begin
+                if (clk_Nmsec) begin //toggle 1이면 왼쪽 0이면 오른쪽
+                    pwm_duty = ( dir_toggle ? pwm_duty + 1 : pwm_duty - 1 );
+                    if (pwm_duty <= deg_180_a) dir_toggle = ~dir_toggle;
+                    else if (pwm_duty >= deg_0_a) dir_toggle = ~dir_toggle;
+                end
+            end
+            // case (btn_p)
+            //     4'b0001 : begin 
+            //         pwm_duty = pwm_duty - 23; // 대충 10도씩 움직임
+            //         if (pwm_duty < deg_180_a) pwm_duty = deg_180_a; // Right
+            //     end
+            //     4'b0010 : begin
+            //         pwm_duty = pwm_duty + 23;
+            //         if (pwm_duty > deg_0_a) pwm_duty = deg_0_a;     //Left
+            //     end
+            //     4'b0100 : pwm_duty = deg_180_a;             // Right max
+            //     4'b1000 : pwm_duty = deg_0_a;               // Left max
+            //     default : pwm_duty = pwm_duty;               // 전 상태 유지
+            // endcase
+
         end
     end
 

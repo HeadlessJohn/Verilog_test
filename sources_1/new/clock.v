@@ -3,11 +3,12 @@
 
 //1us clock generator
 module clock_usec # (
-	parameter freq = 125, //Mhz
-	parameter half_freq = freq/2
+	parameter freq = 125 //Mhz
 	)(
 	input clk, reset_p,
 	output clock_usec );
+	
+	localparam half_freq = freq/2;
 	
 	reg [6:0] cnt_sysclk; //1clk = 8ns
 	wire cp_usec; // 반주기동안 0, 반주기동안 1
@@ -75,6 +76,46 @@ module clock_div_1000 (
 		.reset_p(reset_p),
 		.cp(cp_div_1000),
 		.n_edge(clock_div_1000) );
+endmodule
+
+module clock_div_N #(
+	parameter N = 1000
+)(
+	input clk, reset_p,
+	input clk_source,
+	output clock_div_N );
+
+	reg [8:0] cnt;
+	reg cp_div_N;
+	always @(posedge clk, posedge reset_p) begin
+		if (reset_p) begin
+			cnt = 0;
+			cp_div_N = 0;
+		end
+		else if (clk_source) begin
+			if (cnt >= (N/2) -1) begin 
+				cnt = 0;
+				cp_div_N = ~cp_div_N;
+			end
+			else cnt = cnt + 1;
+		end
+	end
+
+	//0.5ms에 상승엣지 발생, 1ms에 하강엣지 발생
+	//cp_msec
+	// ___________----------__________---------________
+	// 0        0.5ms      1ms      1.5ms    2ms
+	// assign cp_msec = (cnt < 500) ? 0 : 1;
+
+	//1ms 클록 엣지 검출 펄스 출력
+	//clock_msec
+	// _____________________-__________________-______
+	// 0                 1ms+(clk/2)        2ms+(clk/2)
+	edge_detector_n ed1 (
+		.clk(clk),
+		.reset_p(reset_p),
+		.cp(cp_div_N),
+		.n_edge(clock_div_N) );
 endmodule
 
 //1us clock generator
