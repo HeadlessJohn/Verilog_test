@@ -1,1 +1,2 @@
-Studying verilog
+# Studying `Verilog`
+- `Vivado` Practice
