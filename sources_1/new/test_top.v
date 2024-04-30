@@ -1434,8 +1434,17 @@ module sg90_test_top #(
             dir_toggle <= 1'b1; // 왼쪽 먼저
         end
         else begin
-            if (btn_p[0]) begin
-                dir_toggle <= ~dir_toggle;
+            if (btn_p[0]) begin // 누를때마다 방향전환
+                dir_toggle = ~dir_toggle;
+            end
+            else if (btn_p[1]) begin // 오른쪽 끝으로
+                pwm_duty = deg_180_a;
+            end
+            else if (btn_p[2]) begin // 가운데로
+                pwm_duty = deg_90_a;
+            end
+            else if (btn_p[3]) begin // 왼쪽 끝으로
+                pwm_duty = deg_0_a;
             end
             else begin
                 if (clk_Nmsec) begin //toggle 1이면 왼쪽 0이면 오른쪽
