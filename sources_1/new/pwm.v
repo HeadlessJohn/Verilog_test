@@ -3,38 +3,6 @@
 
 
 
-module pwm_cntr #(
-    parameter SYS_FREQ = 125 //125MHz
-    )(
-    input clk, reset_p,
-    output reg pwm,
-    input [15:0] pwm_freq, // ~65535Hz
-    input [9:0] duty     //0.0% ~ 100.0%
-    );
-    // pwm_freq 가 sysclk의 약수가 되면 정확한 타이밍 가능
-
-    reg [26:0] count;
-    always @(posedge reset_p, posedge clk) begin
-        if (reset_p) begin
-            count <= pwm_freq;
-            pwm <= 1;
-        end
-        else begin
-            if (count >= SYS_FREQ*1000*1000) begin
-                pwm <= 1;
-                count <= pwm_freq;
-            end
-            else if ( count >= SYS_FREQ*1000*duty) begin 
-                pwm <= 0;
-                count <= count + pwm_freq;
-            end
-            else count <= count + pwm_freq;
-        end
-    end
-
-endmodule
-
-
 module tb_pwm_test();
 
     reg clk;
@@ -149,6 +117,36 @@ module pwm_controller #(
                 if(cnt_duty < duty) pwm <= 1'b1;
                 else pwm <= 1'b0;
             end           
+        end
+    end
+endmodule
+
+
+module pwm_controller_period #(
+    parameter SYS_FREQ = 125, //125MHz
+    parameter N = 12 // 2^12 = 4096단계
+    ) (
+    input clk, reset_p,
+    input [26:0] duty,
+    input [26:0] pwm_period, 
+    output reg pwm  );
+
+    localparam REAL_SYS_FREQ = SYS_FREQ * 1000 * 1000;
+
+    reg [26:0] cnt;
+    always @(posedge clk, posedge reset_p) begin
+        if (reset_p) begin
+            pwm = 0;
+            cnt = 0;
+        end
+        else begin
+            if (cnt >= pwm_period -1 ) begin 
+                cnt = 0;
+            end
+            else cnt = cnt + 1;
+
+            if (cnt > duty) pwm = 0;
+            else pwm = 1;
         end
     end
 endmodule

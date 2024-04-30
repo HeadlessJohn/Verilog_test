@@ -1476,8 +1476,120 @@ module sg90_test_top #(
                                             .pwm_freq (50), 
                                             .pwm      (motor_pwm)          );
 
+
     wire [15:0] pwm_data;
     bin_to_dec btd(.bin({pwm_duty}), .bcd(pwm_data));
+
+    fnd_4_digit_cntr      fnd (.clk             (clk), 
+                               .reset_p         (reset_p), 
+                               .value           (pwm_data),
+                               .segment_data_ca (seg_7), 
+                               .com_sel         (com) );
+endmodule
+
+
+module sg90_test_top_prd #(
+    parameter SYS_FREQ = 125
+) (
+    input clk, reset_p,
+    input [3:0] btn,
+    output [3:0] com,
+    output [7:0] seg_7,
+    output motor_pwm );
+
+    // 0.5ms =  2.5% duty  -> right
+    //   1ms =    5% duty  
+    // 1.5ms =  7.5% duty  -> center
+    //   2ms =   10% duty
+    // 2.5ms = 12.5% duty  -> left
+
+    // N=10 기준
+    // 1024 * 0.025 =  26    (25.6)
+    // 1024 * 0.05  =  51    (51.2)
+    // 1024 * 0.075 =  77    (76.8)
+    // 1024 * 0.1   = 102   (102.4)
+    // 1024 * 0.125 = 128
+
+    // N=12 기준
+    localparam offset = 0;  // 높아질수록 왼쪽으로 이동
+    // 이론적인 값
+    localparam deg_0_t   =  312500; //left
+    localparam deg_90_t  =  187500; //center
+    localparam deg_180_t =  62500; //right
+    // offset 적용한 값
+    localparam deg_0_a   = deg_0_t   + offset; //left
+    localparam deg_90_a  = deg_90_t  + offset; //center
+    localparam deg_180_a = deg_180_t + offset; //right
+    // 1도당 필요 값
+    // deg_0_t - deg_180_t = 408
+    // 408/180 = 2.2666
+    // localparam deg_1 = (deg_0_t - deg_180_t) / 180;  // 408/180 = 2.2666
+
+
+    wire [3:0]btn_p;
+    button_cntr btn_cntr_0 (clk, reset_p, btn[0], btn_p[0]);
+    button_cntr btn_cntr_1 (clk, reset_p, btn[1], btn_p[1]);
+    button_cntr btn_cntr_2 (clk, reset_p, btn[2], btn_p[2]);
+    button_cntr btn_cntr_3 (clk, reset_p, btn[3], btn_p[3]);
+
+    wire clk_usec, clk_msec, clk_Nmsec;
+    clock_usec #(SYS_FREQ) usec(clk, reset_p, clk_usec);
+    clock_div_1000 msec(clk, reset_p, clk_usec, clk_msec);
+    clock_div_N #(5) Nmsec(clk, reset_p, clk_msec, clk_Nmsec);
+
+    reg [26:0] pwm_duty;
+    reg dir_toggle;
+    always @(posedge clk, posedge reset_p) begin
+        if(reset_p) begin 
+            pwm_duty <= deg_90_a;
+            dir_toggle <= 1'b1; // 왼쪽 먼저
+        end
+        else begin
+            if (btn_p[0]) begin // 누를때마다 방향전환
+                dir_toggle = ~dir_toggle;
+            end
+            else if (btn_p[1]) begin // 오른쪽 끝으로
+                pwm_duty = deg_180_a;
+            end
+            else if (btn_p[2]) begin // 가운데로
+                pwm_duty = deg_90_a;
+            end
+            else if (btn_p[3]) begin // 왼쪽 끝으로
+                pwm_duty = deg_0_a;
+            end
+            else begin
+                if (clk_Nmsec) begin //toggle 1이면 왼쪽 0이면 오른쪽
+                    pwm_duty = ( dir_toggle ? pwm_duty + 200 : pwm_duty - 200 );
+                    if (pwm_duty <= deg_180_a) dir_toggle = ~dir_toggle;
+                    else if (pwm_duty >= deg_0_a) dir_toggle = ~dir_toggle;
+                end
+            end
+            // case (btn_p)
+            //     4'b0001 : begin 
+            //         pwm_duty = pwm_duty - 23; // 대충 10도씩 움직임
+            //         if (pwm_duty < deg_180_a) pwm_duty = deg_180_a; // Right
+            //     end
+            //     4'b0010 : begin
+            //         pwm_duty = pwm_duty + 23;
+            //         if (pwm_duty > deg_0_a) pwm_duty = deg_0_a;     //Left
+            //     end
+            //     4'b0100 : pwm_duty = deg_180_a;             // Right max
+            //     4'b1000 : pwm_duty = deg_0_a;               // Left max
+            //     default : pwm_duty = pwm_duty;               // 전 상태 유지
+            // endcase
+
+        end
+    end
+
+
+    pwm_controller_period pwm_motor_p(.clk(clk),
+                                      .reset_p(reset_p),
+                                      .duty(pwm_duty),
+                                      .pwm_period(2500000),
+                                      .pwm(motor_pwm) );
+
+    wire [15:0] pwm_data;
+    bin_to_dec btd(.bin(pwm_duty), .bcd(pwm_data));
 
     fnd_4_digit_cntr      fnd (.clk             (clk), 
                                .reset_p         (reset_p), 
