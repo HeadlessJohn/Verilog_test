@@ -1655,31 +1655,147 @@ Cora, basys는 별도의 회로가 구성되어 있어 0~1V를 0~3.3V로 변환
     clock_div_1000 msec(clk, reset_p, clk_usec, clk_msec);
     // clock_div_N #(5) Nmsec(clk, reset_p, clk_msec, clk_Nmsec);
 
-    localparam offset = 50;
+    // localparam offset = 50;
     reg [11:0] pwm_duty;
     always @(posedge clk, posedge reset_p) begin
         if (reset_p) begin
-            pwm_duty = offset;
+            pwm_duty = 0 /*offset*/ ;
         end
         else begin
             if (clk_msec) begin
-                pwm_duty = {3'b0, adc_value[11:3]} + offset;
+                pwm_duty = {4'b0, adc_value[11:4]} /* + offset*/;
             end
         end
     end
 
-    pwm_controller pwm_o(.clk(clk),
+    pwm_controller #(125, 8) pwm_o(.clk(clk),
                          .reset_p(reset_p),
-                         .duty(pwm_duty),
+                         .duty(pwm_duty[7:0]),
                          .pwm_freq(50),
                          .pwm(motor_pwm) );
     wire [15:0] fnd_out; 
     // do_out[15:4] 하위 4비트는 사용하지 않음
-    bin_to_dec btd(.bin(do_out[15:4]), .bcd(fnd_out));
+    bin_to_dec btd(.bin(pwm_duty), .bcd(fnd_out));
 
     fnd_4_digit_cntr      fnd (.clk             (clk), 
                                .reset_p         (reset_p), 
                                .value           (fnd_out),
                                .segment_data_ca (seg_7), 
                                .com_sel         (com) );
+endmodule
+
+/*
+-- Running Average
+
+이전 n개의 평균을 구하는 방법
+
+XADC 설정에서  Channel Averaging을 설정하면 Running Average 모드로 동작함
+*/
+
+/*
+ADC는 1개만 들어있으므로 
+1개를 시퀀서로 여러 채널을 읽을 수 있도록 설정함
+*/
+
+module joystick_test_top(
+    input clk, reset_p,
+    input vauxn6, vauxp6, vauxn15, vauxp15,
+    input [3:0]btn,
+    output reg [7:0] led_bar,
+    output pwm_blue, pwm_green,
+    output [3:0] com,
+    output [7:0] seg_7   
+    );
+
+    wire [4:0] channel_out;
+    wire [15:0] do_out;
+    wire eoc_out, eos_out;
+    adc_ch6_ch15 adc_2ch(
+          .daddr_in({2'b0, channel_out}),
+          .dclk_in(clk), // clk
+          .den_in(eoc_out), // 변환이 끝나면 활성화
+          .reset_in(reset_p),
+          .vauxp6(vauxp6),
+          .vauxn6(vauxn6),
+          .vauxp15(vauxp15),
+          .vauxn15(vauxn15),
+          .channel_out(channel_out),     // 채널 마다 다르므로 주의
+          .do_out(do_out), // ADC 값
+          .eoc_out(eoc_out),           // 채널 1개가 스캔 되면 End of Conversion 발생
+          .eos_out(eos_out)         ); // 모든채널이 스캔 되면 End of sequance 발생
+
+    //eoc_out 엣지 디텍터
+    wire eoc_out_pedge;
+    edge_detector_n eoc_ed(.clk(clk),
+                            .reset_p(reset_p),
+                            .cp(eoc_out),
+                            .p_edge(eoc_out_pedge) );
+
+    // ADC 채널 2개를 읽어서 저장
+    reg [11:0] adc_value_x, adc_value_y;
+    always @(posedge clk, posedge reset_p) begin
+        if (reset_p) begin 
+            adc_value_x = 0;
+            adc_value_y = 0;
+        end
+        else begin // eoc_out 의 p edge가 adc값을 발생하면 adc_value에 저장
+            if (eoc_out_pedge) begin
+                // channel_out 의 최상위비트가 1이 붙어 나오므로 4비트만 사용
+                case (channel_out[3:0]) // channel_out에 따라서 adc_value_x, adc_value_y에 저장
+                    4'd6 : adc_value_x = do_out[15:4];
+                    4'd15 : adc_value_y = do_out[15:4];
+                    default : begin 
+                        adc_value_x = adc_value_x; 
+                        adc_value_y = adc_value_y;
+                    end               
+                endcase
+            end
+        end
+    end 
+
+
+
+    wire [15:0] fnd_out; 
+    wire [11:0] bin_data;
+    wire toggle_xy;
+    wire [3:0] btn_p;
+    // x,y 토글 버튼
+    edge_detector_n ed_toggle(.clk(clk), .reset_p(reset_p), .cp(btn[0]), .p_edge(btn_p[0]) );
+    T_flip_flop_p TFF_xy_tog(clk, reset_p, btn_p[0], toggle_xy);
+    assign bin_data = toggle_xy ? adc_value_x : adc_value_y;
+    bin_to_dec btd(.bin(bin_data), .bcd(fnd_out));
+
+    fnd_4_digit_cntr      fnd (.clk             (clk), 
+                               .reset_p         (reset_p), 
+                               .value           (fnd_out),
+                               .segment_data_ca (seg_7), 
+                               .com_sel         (com) );
+
+    always @(posedge clk, posedge reset_p) begin
+        if (reset_p) led_bar = 8'b0000_0000;
+        else begin
+            if (eoc_out_pedge) begin
+                led_bar = (adc_value_x > 3583) ? 8'b1111_1111 :
+                          (adc_value_x > 3071) ? 8'b0111_1111 :
+                          (adc_value_x > 2559) ? 8'b0011_1111 :
+                          (adc_value_x > 2047) ? 8'b0001_1111 :
+                          (adc_value_x > 1535) ? 8'b0000_1111 :
+                          (adc_value_x > 1023) ? 8'b0000_0111 :
+                          (adc_value_x > 511 ) ? 8'b0000_0011 : 8'b0000_0001;
+            end
+        end
+    end
+
+    //RGB LED 출력
+    pwm_controller #(125, 12) pwm_b(.clk(clk),
+                                    .reset_p(reset_p),
+                                    .duty(adc_value_x),
+                                    .pwm_freq(60),
+                                    .pwm(pwm_blue) );
+    
+    pwm_controller #(125, 12) pwm_g(.clk(clk),
+                                    .reset_p(reset_p),
+                                    .duty(adc_value_y),
+                                    .pwm_freq(60),
+                                    .pwm(pwm_green) );
 endmodule
