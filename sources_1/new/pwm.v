@@ -66,7 +66,7 @@ endmodule
 
 module pwm_controller #(
     parameter SYS_FREQ = 125, //125MHz
-    parameter N = 7 // 2^7 = 128단계
+    parameter N = 12 // 2^7 = 128단계
     )(
     input clk, reset_p,
     input [N-1:0] duty, //N비트의 duty비트

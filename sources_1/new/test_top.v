@@ -1597,3 +1597,89 @@ module sg90_test_top_prd #(
                                .segment_data_ca (seg_7), 
                                .com_sel         (com) );
 endmodule
+
+module adc_top(
+    input clk, reset_p,
+    input vauxn6, vauxp6,
+    output [3:0] com,
+    output [7:0] seg_7,
+    output motor_pwm    );
+
+    // ADC 모듈 와이어링
+    wire [4:0] channel_out;
+    wire eoc_out;
+    wire [15:0] do_out; 
+
+    // ADC 모듈 인스턴스
+    xadc_wiz_0 adc_2(
+          .daddr_in({2'b00, channel_out}),
+          .dclk_in(clk),
+          .den_in(eoc_out),
+        //   .di_in;
+        //   .dwe_in;
+          .reset_in(reset_p),
+          .vauxp6(vauxp6),
+          .vauxn6(vauxn6),
+
+        //   .busy_out; // 데이터 변환이 진행중인 상태
+          .channel_out(channel_out),
+          .do_out(do_out),  //12비트 ADC, 상위비트부터 채움
+        //   .drdy_out;
+          .eoc_out(eoc_out)  // End of Conversion
+        //   .eos_out;  // End of Sequence 싱글채널모드에선 사용안함. ADC가 3개면 3개 모두 스캔 되어야 EOS가 발생
+        //   .alarm_out;   
+        //   .vp_in;
+        //   .vn_in;
+    );
+
+    wire eoc_out_pedge;
+    edge_detector_n ed_timeout(.clk(clk), 
+                               .reset_p(reset_p), 
+                               .cp(eoc_out), 
+                               .p_edge(eoc_out_pedge) );
+    reg [11:0] adc_value;
+    always @(posedge clk, posedge reset_p) begin
+        if (reset_p) adc_value = 0;
+        else if (eoc_out_pedge) begin // eoc_out 의 p edge가 adc값을 발생하면 adc_value에 저장
+            adc_value = do_out[15:4];
+        end
+    end
+
+/*
+ADC모듈 자체는 0~1V를 12비트로 나누어 0~4095로 표현
+Cora, basys는 별도의 회로가 구성되어 있어 0~1V를 0~3.3V로 변환
+*/
+
+    wire clk_usec, clk_msec, clk_Nmsec;
+    clock_usec #(125) usec(clk, reset_p, clk_usec);
+    clock_div_1000 msec(clk, reset_p, clk_usec, clk_msec);
+    // clock_div_N #(5) Nmsec(clk, reset_p, clk_msec, clk_Nmsec);
+
+    localparam offset = 50;
+    reg [11:0] pwm_duty;
+    always @(posedge clk, posedge reset_p) begin
+        if (reset_p) begin
+            pwm_duty = offset;
+        end
+        else begin
+            if (clk_msec) begin
+                pwm_duty = {3'b0, adc_value[11:3]} + offset;
+            end
+        end
+    end
+
+    pwm_controller pwm_o(.clk(clk),
+                         .reset_p(reset_p),
+                         .duty(pwm_duty),
+                         .pwm_freq(50),
+                         .pwm(motor_pwm) );
+    wire [15:0] fnd_out; 
+    // do_out[15:4] 하위 4비트는 사용하지 않음
+    bin_to_dec btd(.bin(do_out[15:4]), .bcd(fnd_out));
+
+    fnd_4_digit_cntr      fnd (.clk             (clk), 
+                               .reset_p         (reset_p), 
+                               .value           (fnd_out),
+                               .segment_data_ca (seg_7), 
+                               .com_sel         (com) );
+endmodule
