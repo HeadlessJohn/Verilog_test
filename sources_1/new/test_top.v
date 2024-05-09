@@ -2276,11 +2276,13 @@ module i2c_txt_lcd_top (
     localparam WAIT = 6'b00_0010;
     localparam INIT = 6'b00_0100;
     localparam SEND = 6'b00_1000;
+    localparam SEND2 = 6'b01_0000;
 
     parameter SAMPLE_DATA = "A"; // 0x41
 
     wire [1:0] btn_p, btn_n;
     button_cntr btn_0(clk, reset_p, btn[0], btn_p[0], btn_n[0]);
+    button_cntr btn_1(clk, reset_p, btn[1], btn_p[1], btn_n[1]);
 
     reg [7:0] send_buffer;
     reg send_e, rs;
@@ -2339,7 +2341,8 @@ module i2c_txt_lcd_top (
 			case (state)
                 IDLE : begin
                     if (init_flag == 1) begin
-                        if(btn_p) next_state <= SEND;
+                        if(btn_p[0]) next_state <= SEND;
+                        if(btn_p[1]) next_state <= SEND2;
                     end
                     else next_state <= WAIT;
                 end
@@ -2362,117 +2365,102 @@ module i2c_txt_lcd_top (
                     // BL, EN, RW, RS
                     cnt_us_e = 1'b1;
 
-                    // EN 0으로
-                    if      (cnt_us <= 20'd100) send_buffer = {4'b0011, 1'b1, 1'b0, 1'b0, 1'b0};
-                    else if (cnt_us <= 20'd110) send_e      = 1'b1;
-                    else if (cnt_us <= 20'd120) send_e      = 1'b0;
+                    // 3 3 3 2 2 8 0 c 0 1 0 6
+                    // CMD FUNCTION SET  - EN 0으로
+                    if      (cnt_us <= 20'd100) send_buffer = {4'b0011, 4'b0000};
+                    else if (cnt_us <= 20'd200) send_e      = 1'b1;
+                    else if (cnt_us <= 20'd300) send_e      = 1'b0;
 
-                    // 0011 전송
-                    else if (cnt_us <= 20'd300) send_buffer = {4'b0011, 1'b1, 1'b1, 1'b0, 1'b0};
-                    else if (cnt_us <= 20'd310) send_e      = 1'b1;
-                    else if (cnt_us <= 20'd320) send_e      = 1'b0;
-                    else if (cnt_us <= 20'd500) send_buffer = {4'b0011, 1'b1, 1'b0, 1'b0, 1'b0};
-                    else if (cnt_us <= 20'd510) send_e      = 1'b1;
-                    else if (cnt_us <= 20'd520) send_e      = 1'b0;
+                    // CMD FUNCTION SET - 0011 전송
+                    else if (cnt_us <= 20'd4500) send_buffer = {4'b0011, 4'b0100};
+                    else if (cnt_us <= 20'd4600) send_e      = 1'b1;
+                    else if (cnt_us <= 20'd4700) send_e      = 1'b0;
+                    else if (cnt_us <= 20'd4800) send_buffer = {4'b0011, 4'b0000};
+                    else if (cnt_us <= 20'd4900) send_e      = 1'b1;
+                    else if (cnt_us <= 20'd5000) send_e      = 1'b0;
 
-                    // 4ms 이후 0011 전송
-                    else if (cnt_us <= 20'd4400) send_buffer = {4'b0011, 1'b1, 1'b1, 1'b0, 1'b0};
-                    else if (cnt_us <= 20'd4500) send_e      = 1'b1;
-                    else if (cnt_us <= 20'd4600) send_e      = 1'b0;
-                    else if (cnt_us <= 20'd4700) send_buffer = {4'b0011, 1'b1, 1'b0, 1'b0, 1'b0};
-                    else if (cnt_us <= 20'd4800) send_e      = 1'b1;
-                    else if (cnt_us <= 20'd4900) send_e      = 1'b0;
-                    
-                    // 100us 이후 0011 전송
-                    else if (cnt_us <= 20'd5000) send_buffer = {4'b0011, 1'b1, 1'b1, 1'b0, 1'b0};
-                    else if (cnt_us <= 20'd5100) send_e      = 1'b1;
-                    else if (cnt_us <= 20'd5200) send_e      = 1'b0;
-                    else if (cnt_us <= 20'd5300) send_buffer = {4'b0011, 1'b1, 1'b0, 1'b0, 1'b0};
-                    else if (cnt_us <= 20'd5400) send_e      = 1'b1;
-                    else if (cnt_us <= 20'd5500) send_e      = 1'b0;
+                    // CMD FUNCTION SET - 4ms 이후 0011 전송
+                    else if (cnt_us <= 20'd9000) send_buffer = {4'b0011, 4'b0100};
+                    else if (cnt_us <= 20'd9100) send_e      = 1'b1;
+                    else if (cnt_us <= 20'd9200) send_e      = 1'b0;
+                    else if (cnt_us <= 20'd9300) send_buffer = {4'b0011, 4'b0000};
+                    else if (cnt_us <= 20'd9400) send_e      = 1'b1;
+                    else if (cnt_us <= 20'd9500) send_e      = 1'b0;
 
-                    // 0011 전송
-                    else if (cnt_us <= 20'd5600) send_buffer = {4'b0011, 1'b1, 1'b1, 1'b0, 1'b0};
-                    else if (cnt_us <= 20'd5700) send_e      = 1'b1;
-                    else if (cnt_us <= 20'd5800) send_e      = 1'b0;
-                    else if (cnt_us <= 20'd5900) send_buffer = {4'b0011, 1'b1, 1'b0, 1'b0, 1'b0};
-                    else if (cnt_us <= 20'd6000) send_e      = 1'b1;
-                    else if (cnt_us <= 20'd6100) send_e      = 1'b0;
+                    // CMD FUNCTION SET - 4ms 이후 0011 전송
+                    else if (cnt_us <= 20'd14000) send_buffer = {4'b0011, 4'b0100};
+                    else if (cnt_us <= 20'd14100) send_e      = 1'b1;
+                    else if (cnt_us <= 20'd14200) send_e      = 1'b0;
+                    else if (cnt_us <= 20'd14300) send_buffer = {4'b0011, 4'b0000};
+                    else if (cnt_us <= 20'd14400) send_e      = 1'b1;
+                    else if (cnt_us <= 20'd14500) send_e      = 1'b0;
 
-                    // 0010 전송
-                    else if (cnt_us <= 20'd5600) send_buffer = {4'b0010, 1'b1, 1'b1, 1'b0, 1'b0};
-                    else if (cnt_us <= 20'd5700) send_e      = 1'b1;
-                    else if (cnt_us <= 20'd5800) send_e      = 1'b0;
-                    else if (cnt_us <= 20'd5900) send_buffer = {4'b0010, 1'b1, 1'b0, 1'b0, 1'b0};
-                    else if (cnt_us <= 20'd6000) send_e      = 1'b1;
-                    else if (cnt_us <= 20'd6100) send_e      = 1'b0;
+                    // 4ms 이후 0010 전송
+                    else if (cnt_us <= 20'd18000) send_buffer = {4'b0010, 4'b0100};
+                    else if (cnt_us <= 20'd18100) send_e      = 1'b1;
+                    else if (cnt_us <= 20'd18200) send_e      = 1'b0;
+                    else if (cnt_us <= 20'd18300) send_buffer = {4'b0010, 4'b0000};
+                    else if (cnt_us <= 20'd18400) send_e      = 1'b1;
+                    else if (cnt_us <= 20'd18500) send_e      = 1'b0;
 
-                    // 0010 전송
-                    else if (cnt_us <= 20'd6200) send_buffer = {4'b0010, 1'b1, 1'b1, 1'b0, 1'b0};
-                    else if (cnt_us <= 20'd6300) send_e      = 1'b1;
-                    else if (cnt_us <= 20'd6400) send_e      = 1'b0;
-                    else if (cnt_us <= 20'd6500) send_buffer = {4'b0010, 1'b1, 1'b0, 1'b0, 1'b0};
-                    else if (cnt_us <= 20'd6600) send_e      = 1'b1;
-                    else if (cnt_us <= 20'd6700) send_e      = 1'b0;
+                    // 100us 이후 0010_1000
+                    else if (cnt_us <= 20'd19000) send_buffer = {4'b0010, 4'b0100};
+                    else if (cnt_us <= 20'd19100) send_e      = 1'b1;
+                    else if (cnt_us <= 20'd19200) send_e      = 1'b0;
+                    else if (cnt_us <= 20'd19300) send_buffer = {4'b0010, 4'b0000};
+                    else if (cnt_us <= 20'd19400) send_e      = 1'b1;
+                    else if (cnt_us <= 20'd19500) send_e      = 1'b0;
+                    else if (cnt_us <= 20'd19600) send_buffer = {4'b1000, 4'b0100};
+                    else if (cnt_us <= 20'd19700) send_e      = 1'b1;
+                    else if (cnt_us <= 20'd19800) send_e      = 1'b0;
+                    else if (cnt_us <= 20'd19900) send_buffer = {4'b1000, 4'b0000};
+                    else if (cnt_us <= 20'd20000) send_e      = 1'b1;
+                    else if (cnt_us <= 20'd20100) send_e      = 1'b0;
 
-                    // N F * * 전송 1 0 0 0
-                    else if (cnt_us <= 20'd6800) send_buffer = {4'b1000, 1'b1, 1'b1, 1'b0, 1'b0};
-                    else if (cnt_us <= 20'd6900) send_e      = 1'b1;
-                    else if (cnt_us <= 20'd7000) send_e      = 1'b0;
-                    else if (cnt_us <= 20'd7100) send_buffer = {4'b1000, 1'b1, 1'b0, 1'b0, 1'b0};
-                    else if (cnt_us <= 20'd7200) send_e      = 1'b1;
-                    else if (cnt_us <= 20'd7300) send_e      = 1'b0;
+                    // 100us 이후 0000_1110
+                    else if (cnt_us <= 20'd20200) send_buffer = {4'b0000, 4'b0100};
+                    else if (cnt_us <= 20'd20300) send_e      = 1'b1;
+                    else if (cnt_us <= 20'd20400) send_e      = 1'b0;
+                    else if (cnt_us <= 20'd20500) send_buffer = {4'b0000, 4'b0000};
+                    else if (cnt_us <= 20'd20600) send_e      = 1'b1;
+                    else if (cnt_us <= 20'd20700) send_e      = 1'b0;
+                    else if (cnt_us <= 20'd20800) send_buffer = {4'b1110, 4'b0100};
+                    else if (cnt_us <= 20'd20900) send_e      = 1'b1;
+                    else if (cnt_us <= 20'd21000) send_e      = 1'b0;
+                    else if (cnt_us <= 20'd21100) send_buffer = {4'b1110, 4'b0000};
+                    else if (cnt_us <= 20'd21200) send_e      = 1'b1;
+                    else if (cnt_us <= 20'd21300) send_e      = 1'b0;
 
-                    // 0000 전송
-                    else if (cnt_us <= 20'd7400) send_buffer = {4'b0000, 1'b1, 1'b1, 1'b0, 1'b0};
-                    else if (cnt_us <= 20'd7500) send_e      = 1'b1;
-                    else if (cnt_us <= 20'd7600) send_e      = 1'b0;
-                    else if (cnt_us <= 20'd7700) send_buffer = {4'b0000, 1'b1, 1'b0, 1'b0, 1'b0};
-                    else if (cnt_us <= 20'd7800) send_e      = 1'b1;
-                    else if (cnt_us <= 20'd7900) send_e      = 1'b0;
+                    // 100us 이후 0000_0001
+                    else if (cnt_us <= 20'd21400) send_buffer = {4'b0000, 4'b0100};
+                    else if (cnt_us <= 20'd21500) send_e      = 1'b1;
+                    else if (cnt_us <= 20'd21600) send_e      = 1'b0;
+                    else if (cnt_us <= 20'd21700) send_buffer = {4'b0000, 4'b0000};
+                    else if (cnt_us <= 20'd21800) send_e      = 1'b1;
+                    else if (cnt_us <= 20'd21900) send_e      = 1'b0;
+                    else if (cnt_us <= 20'd22000) send_buffer = {4'b0001, 4'b0100};
+                    else if (cnt_us <= 20'd22100) send_e      = 1'b1;
+                    else if (cnt_us <= 20'd22200) send_e      = 1'b0;
+                    else if (cnt_us <= 20'd22300) send_buffer = {4'b0001, 4'b0000};
+                    else if (cnt_us <= 20'd22400) send_e      = 1'b1;
+                    else if (cnt_us <= 20'd22500) send_e      = 1'b0;
 
-                    // 1000 전송
-                    else if (cnt_us <= 20'd8000) send_buffer = {4'b1000, 1'b1, 1'b1, 1'b0, 1'b0};
-                    else if (cnt_us <= 20'd8100) send_e      = 1'b1;
-                    else if (cnt_us <= 20'd8200) send_e      = 1'b0;
-                    else if (cnt_us <= 20'd8300) send_buffer = {4'b1000, 1'b1, 1'b0, 1'b0, 1'b0};
-                    else if (cnt_us <= 20'd8400) send_e      = 1'b1;
-                    else if (cnt_us <= 20'd8500) send_e      = 1'b0;
-
-                    // 0000 전송
-                    else if (cnt_us <= 20'd8600) send_buffer = {4'b0000, 1'b1, 1'b1, 1'b0, 1'b0};
-                    else if (cnt_us <= 20'd8700) send_e      = 1'b1;
-                    else if (cnt_us <= 20'd8800) send_e      = 1'b0;
-                    else if (cnt_us <= 20'd8900) send_buffer = {4'b0000, 1'b1, 1'b0, 1'b0, 1'b0};
-                    else if (cnt_us <= 20'd9000) send_e      = 1'b1;
-                    else if (cnt_us <= 20'd9100) send_e      = 1'b0;
-
-                    // 0001 전송
-                    else if (cnt_us <= 20'd9200) send_buffer = {4'b0001, 1'b1, 1'b1, 1'b0, 1'b0};
-                    else if (cnt_us <= 20'd9300) send_e      = 1'b1;
-                    else if (cnt_us <= 20'd9400) send_e      = 1'b0;
-                    else if (cnt_us <= 20'd9500) send_buffer = {4'b0001, 1'b1, 1'b0, 1'b0, 1'b0};
-                    else if (cnt_us <= 20'd9600) send_e      = 1'b1;
-                    else if (cnt_us <= 20'd9700) send_e      = 1'b0;
-
-                    // 0000 전송
-                    else if (cnt_us <= 20'd9800) send_buffer = {4'b0000, 1'b1, 1'b1, 1'b0, 1'b0};
-                    else if (cnt_us <= 20'd9900) send_e      = 1'b1;
-                    else if (cnt_us <= 20'd10000) send_e      = 1'b0;
-                    else if (cnt_us <= 20'd10100) send_buffer = {4'b0000, 1'b1, 1'b0, 1'b0, 1'b0};
-                    else if (cnt_us <= 20'd10200) send_e      = 1'b1;
-                    else if (cnt_us <= 20'd10300) send_e      = 1'b0;
-
-                    // 01 I/D S 전송   0 1 1 0
-                    else if (cnt_us <= 20'd10400) send_buffer = {4'b0110, 1'b1, 1'b1, 1'b0, 1'b0};
-                    else if (cnt_us <= 20'd10500) send_e      = 1'b1;
-                    else if (cnt_us <= 20'd10600) send_e      = 1'b0;
-                    else if (cnt_us <= 20'd10700) send_buffer = {4'b0110, 1'b1, 1'b0, 1'b0, 1'b0};
-                    else if (cnt_us <= 20'd10800) send_e      = 1'b1;
-                    else if (cnt_us <= 20'd10900) send_e      = 1'b0;
+                    // 2ms 이후 0000_0110
+                    else if (cnt_us <= 20'd22600) send_buffer = {4'b0000, 4'b0100};
+                    else if (cnt_us <= 20'd22700) send_e      = 1'b1;
+                    else if (cnt_us <= 20'd22800) send_e      = 1'b0;
+                    else if (cnt_us <= 20'd22900) send_buffer = {4'b0000, 4'b0000};
+                    else if (cnt_us <= 20'd23000) send_e      = 1'b1;
+                    else if (cnt_us <= 20'd23100) send_e      = 1'b0;
+                    else if (cnt_us <= 20'd23200) send_buffer = {4'b0110, 4'b0100};
+                    else if (cnt_us <= 20'd23300) send_e      = 1'b1;
+                    else if (cnt_us <= 20'd23400) send_e      = 1'b0;
+                    else if (cnt_us <= 20'd23500) send_buffer = {4'b0110, 4'b1000};
+                    else if (cnt_us <= 20'd23600) send_e      = 1'b1;
+                    else if (cnt_us <= 20'd23700) send_e      = 1'b0;
 
                     // 종료
-                    else if (cnt_us <= 20'd11000) begin
+                    else if (cnt_us <= 20'd23800) begin
                         init_flag <= 1'b1;
                         next_state <= IDLE;
                         cnt_us_e = 1'b0;
@@ -2483,29 +2471,61 @@ module i2c_txt_lcd_top (
 
                     cnt_us_e = 1'b1;
 
-                    // 01 I/D S 전송   0 1 1 0
-                    if      (cnt_us <= 20'd100) send_buffer = {4'b0011, 1'b1, 1'b1, 1'b0, 1'b1};
-                    else if (cnt_us <= 20'd200) send_e      = 1'b1;
-                    else if (cnt_us <= 20'd300) send_e      = 1'b0;
-                    else if (cnt_us <= 20'd400) send_buffer = {4'b0000, 1'b1, 1'b0, 1'b0, 1'b1};
+                    // if      (cnt_us <= 20'd100) send_buffer = {4'b0011, 1'b1, 1'b0, 1'b0, 1'b1};
+                    // else if (cnt_us <= 20'd200) send_e      = 1'b1;
+                    // else if (cnt_us <= 20'd300) send_e      = 1'b0;
+
+                    if (cnt_us <= 20'd400) send_buffer = {4'b0011, 1'b1, 1'b1, 1'b0, 1'b1};
                     else if (cnt_us <= 20'd500) send_e      = 1'b1;
                     else if (cnt_us <= 20'd600) send_e      = 1'b0;
 
+                    else if (cnt_us <= 20'd700) send_buffer = {4'b0000, 1'b1, 1'b0, 1'b0, 1'b1};
+                    else if (cnt_us <= 20'd800) send_e      = 1'b1;
+                    else if (cnt_us <= 20'd900) send_e      = 1'b0;
+
+                    else if (cnt_us <= 20'd1000) send_buffer = {4'b0000, 1'b1, 1'b1, 1'b0, 1'b1};
+                    else if (cnt_us <= 20'd1100) send_e      = 1'b1;
+                    else if (cnt_us <= 20'd1200) send_e      = 1'b0;
+
+                    else if (cnt_us <= 20'd1300) send_buffer = {4'b0000, 1'b1, 1'b0, 1'b0, 1'b1};
+                    else if (cnt_us <= 20'd1400) send_e      = 1'b1;
+                    else if (cnt_us <= 20'd1500) send_e      = 1'b0;
+
                     // 종료
-                    else if (cnt_us <= 20'd700) begin
+                    else if (cnt_us <= 20'd1600) begin
                         next_state <= IDLE;
                         cnt_us_e = 1'b0;
                     end
+                end
 
-                    // if (busy_flag) begin
-                    //     next_state = IDLE;
-                    //     send_e = 0;
-                    // end
-                    // else begin
-                    //     send_buffer = SAMPLE_DATA;
-                    //     rs = 1;
-                    //     send_e = 1;
-                    // end
+                SEND2 : begin
+                    cnt_us_e = 1'b1;
+
+                    // if      (cnt_us <= 20'd100) send_buffer = {4'b0011, 1'b1, 1'b0, 1'b0, 1'b1};
+                    // else if (cnt_us <= 20'd200) send_e      = 1'b1;
+                    // else if (cnt_us <= 20'd300) send_e      = 1'b0;
+
+                    if (cnt_us <= 20'd400) send_buffer = {4'b0011, 1'b1, 1'b1, 1'b0, 1'b1};
+                    else if (cnt_us <= 20'd500) send_e      = 1'b1;
+                    else if (cnt_us <= 20'd600) send_e      = 1'b0;
+
+                    else if (cnt_us <= 20'd700) send_buffer = {4'b1111, 1'b1, 1'b0, 1'b0, 1'b1};
+                    else if (cnt_us <= 20'd800) send_e      = 1'b1;
+                    else if (cnt_us <= 20'd900) send_e      = 1'b0;
+
+                    else if (cnt_us <= 20'd1000) send_buffer = {4'b1111, 1'b1, 1'b1, 1'b0, 1'b1};
+                    else if (cnt_us <= 20'd1100) send_e      = 1'b1;
+                    else if (cnt_us <= 20'd1200) send_e      = 1'b0;
+
+                    else if (cnt_us <= 20'd1300) send_buffer = {4'b1111, 1'b1, 1'b0, 1'b0, 1'b1};
+                    else if (cnt_us <= 20'd1400) send_e      = 1'b1;
+                    else if (cnt_us <= 20'd1500) send_e      = 1'b0;
+
+                    // 종료
+                    else if (cnt_us <= 20'd1600) begin
+                        next_state <= IDLE;
+                        cnt_us_e = 1'b0;
+                    end
                 end
             endcase
  		end
