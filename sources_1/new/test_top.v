@@ -1726,10 +1726,34 @@ module joystick_test_top(
 
     //eoc_out 엣지 디텍터
     wire eoc_out_pedge;
-    edge_detector_n eoc_ed(.clk(clk),
+    edge_detector_n  eoc_ed(.clk(clk),
                             .reset_p(reset_p),
                             .cp(eoc_out),
                             .p_edge(eoc_out_pedge) );
+    
+    /*
+    //eos_out 엣지 디텍터
+    wire eos_out_pedge;
+    edge_detector_n  eos_ed(.clk(clk),
+                            .reset_p(reset_p),
+                            .cp(eos_out),
+                            .p_edge(eos_out_pedge) );
+
+    // ADC의 타이밍이 맞아야 하는경우 eos_out을 사용하여 ADC값이 동시에 바뀌도록 함
+    reg [6:0] duty_x, duty_y;
+    always @(posedge clk, posedge reset_p) begin
+        if (reset_p) begin
+            duty_x = 0;
+            duty_y = 0;
+        end
+        ense begin
+            if (eos_out_pedge) begin
+                duty_x = adc_value_x[6:0];
+                duty_y = adc_value_y[6:0];
+            end
+        end
+    end
+    */
 
     // ADC 채널 2개를 읽어서 저장
     reg [11:0] adc_value_x, adc_value_y;
@@ -1798,4 +1822,692 @@ module joystick_test_top(
                                     .duty(adc_value_y),
                                     .pwm_freq(60),
                                     .pwm(pwm_green) );
+endmodule
+
+
+module i2c_master_test_top (
+	input clk, reset_p,
+    input [1:0] btn,
+    output [7:0] led_bar,
+    output sda, scl );
+
+
+    wire [1:0] btn_p, btn_n;
+    button_cntr btn_0(clk, reset_p, btn[0], btn_p[0], btn_n[0]);
+    button_cntr btn_1(clk, reset_p, btn[1], btn_p[1], btn_n[1]);
+
+    reg [7:0] data;
+    reg valid;
+    always @(posedge clk, posedge reset_p) begin
+        if (reset_p) begin
+            data <= 8'b0000_0000;
+            valid <= 1'b0;
+        end
+        else begin
+            if (btn_p[0]) begin
+                data <= 8'b0000_0000;
+                valid <= 1'b1;
+            end
+            else if (btn_n[0]) begin
+                valid <= 1'b0;
+            end
+
+            else if (btn_p[1]) begin
+                data <= 8'b0000_1000;
+                valid <= 1'b1;    
+            end
+            else if (btn_n[1]) begin
+                valid <= 1'b0;
+            end
+        end
+    end
+/*
+{data, bt, en, rw, rs}
+ D7 |D6 |D5 |D4 |BT |EN |RW | RS
+[ 7 | 6 | 5 | 4 | 3 | 2 | 1 | 0 ]
+
+4bit mode
+주소 상위 4비트 보내고
+en 1->0
+주소 하위 4비트 보내기
+en 1->0
+데이터(명령) 상위 4비트 보내고
+en 1->0
+데이터(명령) 하위 4비트 보내기
+en 1->0
+
+{addr + W} = 0x27 = 0100_1110
+en : 0x04
+
+*/
+    i2c_master i2c_mst( .clk       (clk),
+                        .reset_p   (reset_p),
+                        .rd_wr     (1'b0),
+                        .addr      (7'h27),
+                        .data_in   (data),
+                        .valid     (valid),
+                        .led_bar   (led_bar),
+                        .sda       (sda),
+                        .scl       (scl)        );
+
+
+endmodule
+
+
+module i2c_lcd_init (
+    input clk, reset_p,
+    input [1:0] btn,
+    output sda, scl,
+    output [7:0] led_bar,
+    output [7:0] seg_7,
+    output [3:0] com     );
+
+
+
+    localparam ADDR = 7'h27;
+
+    localparam S_IDLE                   = 14'b00_0000_0000_0001;
+    localparam S_DELAY_15MS             = 14'b00_0000_0000_0010;
+    localparam S_FUNCTION_SET_1         = 14'b00_0000_0000_0100;
+    localparam S_DELAY_4_1MS            = 14'b00_0000_0000_1000;
+    localparam S_FUNCTION_SET_2         = 14'b00_0000_0001_0000;
+    localparam S_DELAY_100US            = 14'b00_0000_0010_0000;
+    localparam S_FUNCTION_SET_3         = 14'b00_0000_0100_0000;
+    localparam S_FUNCTION_SET_4         = 14'b00_0000_1000_0000;
+    localparam S_CMD_4_BIT_MODE         = 14'b00_0001_0000_0000;
+    localparam S_CMD_DISPLAY_OFF        = 14'b00_0010_0000_0000;
+    localparam S_CMD_DISPLAY_CLR        = 14'b00_0100_0000_0000;
+    localparam S_CMD_ENTRY_MODE_SET     = 14'b00_1000_0000_0000;
+    localparam S_CMD_DISPLAY_ON         = 14'b01_0000_0000_0000;
+
+    localparam CMD_4BIT_MODE            = 8'h28;
+    localparam CMD_DISPLAY_OFF          = 8'h08;
+    localparam CMD_DISPLAY_CLR          = 8'h01;
+    localparam CMD_ENTRY_MODE_SET       = 8'h06;
+    localparam CMD_DISPLAY_ON           = 8'h0C;
+
+
+    reg rs; // 0: command, 1: data
+    reg send;
+    reg [7:0] data;
+    wire [7:0] data_out;
+    wire valid, busy_flag;
+
+    wire [1:0] btn_p, btn_n;
+    button_cntr btn_0(clk, reset_p, btn[0], btn_p[0], btn_n[0]);
+    button_cntr btn_1(clk, reset_p, btn[1], btn_p[1], btn_n[1]);
+    
+    //usec 카운터
+    wire clk_usec;
+    reg clk_usec_e;
+    clock_usec #(125) usec(clk, reset_p, clk_usec);
+
+    reg [13:0] cnt_usec;
+    always @(negedge clk, posedge reset_p) begin
+        if (reset_p) begin
+            cnt_usec <= 0;
+        end
+        else begin
+            if (clk_usec_e) begin
+                if (clk_usec) cnt_usec <= cnt_usec + 1;
+            end
+            else begin
+                cnt_usec <= 0;
+            end
+        end
+    end
+
+    //msec 카운터
+    wire clk_msec;
+    reg clk_msec_e;
+    clock_div_1000 msec(clk, reset_p, clk_usec, clk_msec);
+
+    reg [13:0] cnt_msec;
+    always @(negedge clk, posedge reset_p) begin
+        if (reset_p) begin
+            cnt_msec <= 0;
+        end
+        else begin
+            if (clk_msec_e) begin
+                if (clk_msec) cnt_msec <= cnt_msec + 1;
+            end
+            else begin
+                cnt_msec <= 0;
+            end
+        end
+    end
+
+    reg [13:0] state, next_state;
+    always @(negedge clk, posedge reset_p) begin
+        if (reset_p) begin
+            state <= S_IDLE;
+        end
+        else begin
+            state <= next_state;
+        end
+    end
+
+    always @(posedge clk, posedge reset_p) begin
+        if (reset_p) begin
+            data <= 8'b0;
+            send <= 1'b0;
+            rs <= 1'b0;
+            clk_usec_e <= 1'b0;
+            clk_msec_e <= 1'b0;
+            next_state <= S_IDLE;
+        end
+        else begin
+            if (btn_p[1]) begin
+                data <= 8'h3F;
+                rs <= 1'b1;
+                send <= 1'b1;
+            end
+            else begin
+
+            case (state)
+                S_IDLE : begin
+                    data <= 8'b0;
+                    send <= 1'b0;
+                    rs <= 1'b0;
+                    if (btn_p[0]) begin
+                        next_state <= S_DELAY_15MS;
+                    end
+                    else begin
+                        next_state <= S_IDLE;
+                    end
+                end
+
+                S_DELAY_15MS : begin
+                    if (cnt_msec >= 20) begin
+                        clk_msec_e <= 1'b0;
+                        next_state <= S_FUNCTION_SET_1;
+                    end
+                    else begin
+                        clk_msec_e <= 1'b1;
+                    end 
+                end
+
+                S_FUNCTION_SET_1 : begin
+                    if (busy_flag==0) begin // busy_flag가 0이 되기를 대기함
+                        data <= 8'h03;
+                        send <= 1'b1;
+                        next_state <= S_DELAY_4_1MS;
+                    end
+                    else begin
+                        next_state <= S_FUNCTION_SET_1;
+                        send <= 1'b0;
+                    end                     
+                end
+
+                S_DELAY_4_1MS : begin
+                    if (cnt_msec >= 6) begin
+                        clk_msec_e <= 1'b0;
+                        next_state <= S_FUNCTION_SET_2;
+                    end
+                    else begin
+                        clk_msec_e <= 1'b1;
+                    end 
+                end
+  
+                S_FUNCTION_SET_2 : begin
+                    if (busy_flag==0) begin // busy_flag가 0이 되기를 대기함
+                        data <= 8'h03;
+                        send <= 1'b1;
+                        next_state <= S_DELAY_100US;
+                    end
+                    else begin
+                        next_state <= S_FUNCTION_SET_2;
+                        send <= 1'b0;
+                    end                     
+                end  
+
+                S_DELAY_100US : begin
+                    if (cnt_usec >= 200) begin
+                        clk_usec_e <= 1'b0;
+                        next_state <= S_FUNCTION_SET_3;
+                    end
+                    else begin
+                        clk_usec_e <= 1'b1;
+                    end 
+                end    
+
+                S_FUNCTION_SET_3 : begin
+                    if (busy_flag==0) begin // busy_flag가 0이 되기를 대기함
+                        data <= 8'h03;
+                        send <= 1'b1;
+                        next_state <= S_FUNCTION_SET_4;
+                    end
+                    else begin
+                        next_state <= S_FUNCTION_SET_3;
+                        send <= 1'b0;
+                    end                     
+                end     
+
+                S_FUNCTION_SET_4 : begin
+                    if (busy_flag==0) begin // busy_flag가 0이 되기를 대기함
+                        data <= 8'h03;
+                        send <= 1'b1;
+                        next_state <= S_CMD_4_BIT_MODE;
+                    end
+                    else begin
+                        next_state <= S_FUNCTION_SET_4;
+                        send <= 1'b0;
+                    end                     
+                end
+
+                S_CMD_4_BIT_MODE : begin
+                    if (busy_flag==0) begin // busy_flag가 0이 되기를 대기함
+                        data <= CMD_4BIT_MODE;
+                        send <= 1'b1;
+                        next_state <= S_CMD_DISPLAY_OFF;
+                    end
+                    else begin
+                        next_state <= S_CMD_4_BIT_MODE;
+                        send <= 1'b0;
+                    end                     
+                end  
+                   
+                S_CMD_DISPLAY_OFF : begin
+                    if (busy_flag==0) begin // busy_flag가 0이 되기를 대기함
+                        data <= CMD_DISPLAY_OFF;
+                        send <= 1'b1;
+                        next_state <= S_CMD_DISPLAY_CLR;
+                    end
+                    else begin
+                        next_state <= S_CMD_DISPLAY_OFF;
+                        send <= 1'b0;
+                    end                     
+                end 
+
+                S_CMD_DISPLAY_CLR  : begin
+                    if (busy_flag==0) begin // busy_flag가 0이 되기를 대기함
+                        data <= CMD_DISPLAY_CLR;
+                        send <= 1'b1;
+                        next_state <= S_CMD_ENTRY_MODE_SET;
+                    end
+                    else begin
+                        next_state <= S_CMD_DISPLAY_CLR;
+                        send <= 1'b0;
+                    end                     
+                end 
+                
+                S_CMD_ENTRY_MODE_SET  : begin
+                    if (busy_flag==0) begin // busy_flag가 0이 되기를 대기함
+                        data <= CMD_ENTRY_MODE_SET;
+                        send <= 1'b1;
+                        next_state <= S_CMD_DISPLAY_ON;
+                    end
+                    else begin
+                        next_state <= S_CMD_ENTRY_MODE_SET;
+                        send <= 1'b0;
+                    end                     
+                end 
+
+                S_CMD_DISPLAY_ON  : begin
+                    if (busy_flag==0) begin // busy_flag가 0이 되기를 대기함
+                        data <= CMD_DISPLAY_ON;
+                        send <= 1'b1;
+                        next_state <= S_IDLE;
+                    end
+                    else begin
+                        next_state <= S_CMD_DISPLAY_ON;
+                        send <= 1'b0;
+                    end                     
+                end  
+
+            endcase
+            
+            end
+        end
+    end
+
+    i2c_lcd_tx_byte i2c_lcd_tx( .clk           (clk),
+                                .reset_p       (reset_p),
+                                .send_buffer   (data),     // 보낼 데이터
+                                .send          (send),   // 통신 시작 신호
+                                .rs            (rs),       // 0: command, 1: data
+                                .data_out      (data_out), // tx module로 보낼 데이터
+                                .valid         (valid),
+                                .busy_flag     (busy_flag)  );    // tx module로 송신 on off 
+    
+    
+    i2c_transmit_addr_byte i2c_tx( .clk        (clk),
+                                   .reset_p    (reset_p),
+                                   .addr       (ADDR),
+                                   .rs         (rs),
+                                   .data_in    (data_out),
+                                   .valid      (valid),
+                                   .sda        (sda),
+                                   .scl        (scl) );
+
+    assign led_bar = {busy_flag, state[6:0]};
+    wire [15:0] fnd_out; 
+    // do_out[15:4] 하위 4비트는 사용하지 않음
+    bin_to_dec btd(.bin({4'b0, data_out}), .bcd(fnd_out));
+
+    fnd_4_digit_cntr      fnd (.clk             (clk), 
+                               .reset_p         (reset_p), 
+                               .value           (fnd_out),
+                               .segment_data_ca (seg_7), 
+                               .com_sel         (com) );
+
+endmodule
+
+module i2c_test (
+    input clk, reset_p,
+    input [1:0] btn,
+    output sda, scl
+);
+
+    localparam ADDR = 8'h27;
+
+    wire [1:0] btn_p, btn_n;
+    button_cntr btn_0(clk, reset_p, btn[0], btn_p[0], btn_n[0]);
+    button_cntr btn_1(clk, reset_p, btn[1], btn_p[1], btn_n[1]);
+
+    reg [7:0] data;
+    reg rs;
+    reg send;
+    // reg valid;
+    always @(posedge clk, posedge reset_p) begin
+        if (reset_p) begin
+            data <= 8'b0;
+            rs <= 0;
+            send <= 1'b0;   
+            // valid <= 1'b0;         
+        end
+        else begin
+            if (btn_p[0]) begin
+                data <= 8'hFF;
+                rs   <= 1'b0;
+                send <= 1'b1; 
+                // valid <= 1'b1;
+            end
+            else if (btn_p[1]) begin
+                data <= 8'h00;
+                rs   <= 1'b0;
+                send <= 1'b1; 
+                // valid <= 1'b1;
+            end
+            else begin 
+                send <= 1'b0;
+                // valid <= 1'b0;
+            end
+        end
+    end
+
+    i2c_lcd_tx_byte i2c_lcd_tx( .clk           (clk),
+                                .reset_p       (reset_p),
+                                .send_buffer   (data),     // 보낼 데이터
+                                .send          (send),   // 통신 시작 신호
+                                .rs            (rs),       // 0: command, 1: data
+                                .data_out      (data_out), // tx module로 보낼 데이터
+                                .valid         (valid),
+                                .busy_flag     (busy_flag)  );    // tx module로 송신 on off 
+    i2c_master i2c( .clk(clk),
+                    .reset_p(reset_p),
+                    .rs(rs),
+                    .addr(ADDR),
+                    .data_in(data_out),
+                    .valid(valid),
+                    .sda(sda),
+                    .scl(scl) );
+    /*
+    i2c_transmit_addr_byte i2c_tx( .clk        (clk),
+                                   .reset_p    (reset_p),
+                                   .addr       (ADDR),
+                                   .rs         (rs),
+                                   .data_in    (data),
+                                //    .data_in    (data_out),
+                                   .valid      (valid),
+                                   .sda        (sda),
+                                   .scl        (scl) );
+                                   */
+endmodule
+
+module i2c_txt_lcd_top (
+    input clk, reset_p,
+    input [1:0]btn,
+    output scl, sda);
+
+    localparam ADDR = 8'h27;
+
+    localparam IDLE = 6'b00_0001;
+    localparam WAIT = 6'b00_0010;
+    localparam INIT = 6'b00_0100;
+    localparam SEND = 6'b00_1000;
+
+    parameter SAMPLE_DATA = "A"; // 0x41
+
+    wire [1:0] btn_p, btn_n;
+    button_cntr btn_0(clk, reset_p, btn[0], btn_p[0], btn_n[0]);
+
+    reg [7:0] send_buffer;
+    reg send_e, rs;
+    i2c_master i2c( .clk(clk),
+                    .reset_p(reset_p),
+                    .rw(1'b0),
+                    .addr(ADDR),
+                    .data_in(send_buffer),
+                    .valid(send_e),
+                    .sda(sda),
+                    .scl(scl) );
+
+    wire clk_usec;
+	clock_usec # (125) clk_us(clk, reset_p, clk_usec);
+
+	// ms 카운터
+	reg [20:0] cnt_us;
+	reg cnt_us_e;
+	always @(negedge clk, posedge reset_p) begin
+		if (reset_p) begin
+			cnt_us <= 20'b0;
+		end
+		else begin
+			if (cnt_us_e) begin
+				if (clk_usec) begin
+					cnt_us <= cnt_us + 1;
+				end
+			end
+			else begin
+				cnt_us <= 20'b0;
+			end
+		end
+	end
+
+	// FSM
+	reg [5:0]state, next_state;
+	always @(negedge clk, posedge reset_p) begin
+		if (reset_p) begin
+			state <= IDLE;
+		end
+		else begin
+			state <= next_state;
+		end
+	end
+
+    reg init_flag;
+    always @(posedge clk, posedge reset_p) begin
+		if (reset_p) begin
+			next_state <= IDLE;
+            send_buffer <= 8'b0;
+            rs <= 1'b0;
+            send_e <= 1'b0;
+            init_flag <= 1'b0;
+		end
+		else begin
+			case (state)
+                IDLE : begin
+                    if (init_flag == 1) begin
+                        if(btn_p) next_state <= SEND;
+                    end
+                    else next_state <= WAIT;
+                end
+                
+                WAIT : begin // 40ms 대기하고
+                    if (cnt_us <= 20'd40_000) begin
+                            cnt_us_e <= 1'b1;
+                        end
+                    else begin // 40ms가 지나면 INIT 진행
+                        next_state = INIT;
+                        cnt_us_e <= 1'b0; //타이머를 초기화
+                    end
+                end
+                /*
+                 N : 0이면 1줄, 1이면 2줄
+                 F : 0이면 5x8, 1이면 5x10
+                 I/D : 0이면 커서 왼쪽으로, 1이면 오른쪽으로 증가
+                */
+                INIT : begin 
+                    // BL, EN, RW, RS
+                    cnt_us_e = 1'b1;
+
+                    // EN 0으로
+                    if      (cnt_us <= 20'd100) send_buffer = {4'b0011, 1'b1, 1'b0, 1'b0, 1'b0};
+                    else if (cnt_us <= 20'd110) send_e      = 1'b1;
+                    else if (cnt_us <= 20'd120) send_e      = 1'b0;
+
+                    // 0011 전송
+                    else if (cnt_us <= 20'd300) send_buffer = {4'b0011, 1'b1, 1'b1, 1'b0, 1'b0};
+                    else if (cnt_us <= 20'd310) send_e      = 1'b1;
+                    else if (cnt_us <= 20'd320) send_e      = 1'b0;
+                    else if (cnt_us <= 20'd500) send_buffer = {4'b0011, 1'b1, 1'b0, 1'b0, 1'b0};
+                    else if (cnt_us <= 20'd510) send_e      = 1'b1;
+                    else if (cnt_us <= 20'd520) send_e      = 1'b0;
+
+                    // 4ms 이후 0011 전송
+                    else if (cnt_us <= 20'd4400) send_buffer = {4'b0011, 1'b1, 1'b1, 1'b0, 1'b0};
+                    else if (cnt_us <= 20'd4500) send_e      = 1'b1;
+                    else if (cnt_us <= 20'd4600) send_e      = 1'b0;
+                    else if (cnt_us <= 20'd4700) send_buffer = {4'b0011, 1'b1, 1'b0, 1'b0, 1'b0};
+                    else if (cnt_us <= 20'd4800) send_e      = 1'b1;
+                    else if (cnt_us <= 20'd4900) send_e      = 1'b0;
+                    
+                    // 100us 이후 0011 전송
+                    else if (cnt_us <= 20'd5000) send_buffer = {4'b0011, 1'b1, 1'b1, 1'b0, 1'b0};
+                    else if (cnt_us <= 20'd5100) send_e      = 1'b1;
+                    else if (cnt_us <= 20'd5200) send_e      = 1'b0;
+                    else if (cnt_us <= 20'd5300) send_buffer = {4'b0011, 1'b1, 1'b0, 1'b0, 1'b0};
+                    else if (cnt_us <= 20'd5400) send_e      = 1'b1;
+                    else if (cnt_us <= 20'd5500) send_e      = 1'b0;
+
+                    // 0011 전송
+                    else if (cnt_us <= 20'd5600) send_buffer = {4'b0011, 1'b1, 1'b1, 1'b0, 1'b0};
+                    else if (cnt_us <= 20'd5700) send_e      = 1'b1;
+                    else if (cnt_us <= 20'd5800) send_e      = 1'b0;
+                    else if (cnt_us <= 20'd5900) send_buffer = {4'b0011, 1'b1, 1'b0, 1'b0, 1'b0};
+                    else if (cnt_us <= 20'd6000) send_e      = 1'b1;
+                    else if (cnt_us <= 20'd6100) send_e      = 1'b0;
+
+                    // 0010 전송
+                    else if (cnt_us <= 20'd5600) send_buffer = {4'b0010, 1'b1, 1'b1, 1'b0, 1'b0};
+                    else if (cnt_us <= 20'd5700) send_e      = 1'b1;
+                    else if (cnt_us <= 20'd5800) send_e      = 1'b0;
+                    else if (cnt_us <= 20'd5900) send_buffer = {4'b0010, 1'b1, 1'b0, 1'b0, 1'b0};
+                    else if (cnt_us <= 20'd6000) send_e      = 1'b1;
+                    else if (cnt_us <= 20'd6100) send_e      = 1'b0;
+
+                    // 0010 전송
+                    else if (cnt_us <= 20'd6200) send_buffer = {4'b0010, 1'b1, 1'b1, 1'b0, 1'b0};
+                    else if (cnt_us <= 20'd6300) send_e      = 1'b1;
+                    else if (cnt_us <= 20'd6400) send_e      = 1'b0;
+                    else if (cnt_us <= 20'd6500) send_buffer = {4'b0010, 1'b1, 1'b0, 1'b0, 1'b0};
+                    else if (cnt_us <= 20'd6600) send_e      = 1'b1;
+                    else if (cnt_us <= 20'd6700) send_e      = 1'b0;
+
+                    // N F * * 전송 1 0 0 0
+                    else if (cnt_us <= 20'd6800) send_buffer = {4'b1000, 1'b1, 1'b1, 1'b0, 1'b0};
+                    else if (cnt_us <= 20'd6900) send_e      = 1'b1;
+                    else if (cnt_us <= 20'd7000) send_e      = 1'b0;
+                    else if (cnt_us <= 20'd7100) send_buffer = {4'b1000, 1'b1, 1'b0, 1'b0, 1'b0};
+                    else if (cnt_us <= 20'd7200) send_e      = 1'b1;
+                    else if (cnt_us <= 20'd7300) send_e      = 1'b0;
+
+                    // 0000 전송
+                    else if (cnt_us <= 20'd7400) send_buffer = {4'b0000, 1'b1, 1'b1, 1'b0, 1'b0};
+                    else if (cnt_us <= 20'd7500) send_e      = 1'b1;
+                    else if (cnt_us <= 20'd7600) send_e      = 1'b0;
+                    else if (cnt_us <= 20'd7700) send_buffer = {4'b0000, 1'b1, 1'b0, 1'b0, 1'b0};
+                    else if (cnt_us <= 20'd7800) send_e      = 1'b1;
+                    else if (cnt_us <= 20'd7900) send_e      = 1'b0;
+
+                    // 1000 전송
+                    else if (cnt_us <= 20'd8000) send_buffer = {4'b1000, 1'b1, 1'b1, 1'b0, 1'b0};
+                    else if (cnt_us <= 20'd8100) send_e      = 1'b1;
+                    else if (cnt_us <= 20'd8200) send_e      = 1'b0;
+                    else if (cnt_us <= 20'd8300) send_buffer = {4'b1000, 1'b1, 1'b0, 1'b0, 1'b0};
+                    else if (cnt_us <= 20'd8400) send_e      = 1'b1;
+                    else if (cnt_us <= 20'd8500) send_e      = 1'b0;
+
+                    // 0000 전송
+                    else if (cnt_us <= 20'd8600) send_buffer = {4'b0000, 1'b1, 1'b1, 1'b0, 1'b0};
+                    else if (cnt_us <= 20'd8700) send_e      = 1'b1;
+                    else if (cnt_us <= 20'd8800) send_e      = 1'b0;
+                    else if (cnt_us <= 20'd8900) send_buffer = {4'b0000, 1'b1, 1'b0, 1'b0, 1'b0};
+                    else if (cnt_us <= 20'd9000) send_e      = 1'b1;
+                    else if (cnt_us <= 20'd9100) send_e      = 1'b0;
+
+                    // 0001 전송
+                    else if (cnt_us <= 20'd9200) send_buffer = {4'b0001, 1'b1, 1'b1, 1'b0, 1'b0};
+                    else if (cnt_us <= 20'd9300) send_e      = 1'b1;
+                    else if (cnt_us <= 20'd9400) send_e      = 1'b0;
+                    else if (cnt_us <= 20'd9500) send_buffer = {4'b0001, 1'b1, 1'b0, 1'b0, 1'b0};
+                    else if (cnt_us <= 20'd9600) send_e      = 1'b1;
+                    else if (cnt_us <= 20'd9700) send_e      = 1'b0;
+
+                    // 0000 전송
+                    else if (cnt_us <= 20'd9800) send_buffer = {4'b0000, 1'b1, 1'b1, 1'b0, 1'b0};
+                    else if (cnt_us <= 20'd9900) send_e      = 1'b1;
+                    else if (cnt_us <= 20'd10000) send_e      = 1'b0;
+                    else if (cnt_us <= 20'd10100) send_buffer = {4'b0000, 1'b1, 1'b0, 1'b0, 1'b0};
+                    else if (cnt_us <= 20'd10200) send_e      = 1'b1;
+                    else if (cnt_us <= 20'd10300) send_e      = 1'b0;
+
+                    // 01 I/D S 전송   0 1 1 0
+                    else if (cnt_us <= 20'd10400) send_buffer = {4'b0110, 1'b1, 1'b1, 1'b0, 1'b0};
+                    else if (cnt_us <= 20'd10500) send_e      = 1'b1;
+                    else if (cnt_us <= 20'd10600) send_e      = 1'b0;
+                    else if (cnt_us <= 20'd10700) send_buffer = {4'b0110, 1'b1, 1'b0, 1'b0, 1'b0};
+                    else if (cnt_us <= 20'd10800) send_e      = 1'b1;
+                    else if (cnt_us <= 20'd10900) send_e      = 1'b0;
+
+                    // 종료
+                    else if (cnt_us <= 20'd11000) begin
+                        init_flag <= 1'b1;
+                        next_state <= IDLE;
+                        cnt_us_e = 1'b0;
+                    end
+                end
+
+                SEND : begin
+
+                    cnt_us_e = 1'b1;
+
+                    // 01 I/D S 전송   0 1 1 0
+                    if      (cnt_us <= 20'd100) send_buffer = {4'b0011, 1'b1, 1'b1, 1'b0, 1'b1};
+                    else if (cnt_us <= 20'd200) send_e      = 1'b1;
+                    else if (cnt_us <= 20'd300) send_e      = 1'b0;
+                    else if (cnt_us <= 20'd400) send_buffer = {4'b0000, 1'b1, 1'b0, 1'b0, 1'b1};
+                    else if (cnt_us <= 20'd500) send_e      = 1'b1;
+                    else if (cnt_us <= 20'd600) send_e      = 1'b0;
+
+                    // 종료
+                    else if (cnt_us <= 20'd700) begin
+                        next_state <= IDLE;
+                        cnt_us_e = 1'b0;
+                    end
+
+                    // if (busy_flag) begin
+                    //     next_state = IDLE;
+                    //     send_e = 0;
+                    // end
+                    // else begin
+                    //     send_buffer = SAMPLE_DATA;
+                    //     rs = 1;
+                    //     send_e = 1;
+                    // end
+                end
+            endcase
+ 		end
+	end
 endmodule
